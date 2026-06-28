@@ -12,7 +12,7 @@ export async function GET() {
   }
 
   try {
-    const orders = getOrders();
+    const orders = await getOrders();
     return NextResponse.json({ orders });
   } catch (err) {
     console.error(err);
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Eksik bilgi' }, { status: 400 });
     }
 
-    const order_number = createOrder({
+    const order_number = await createOrder({
       customer_name,
       customer_email,
       customer_phone,

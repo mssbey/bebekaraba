@@ -8,6 +8,8 @@ import WhyUsSection from '../components/WhyUsSection';
 import CtaSection from '../components/CtaSection';
 import TestimonialsSection from '../components/TestimonialsSection';
 
+export const dynamic = 'force-dynamic';
+
 const TRUST_BADGES = [
   { icon: Shield, title: 'Güvenli Ödeme', desc: 'SSL korumalı işlemler' },
   { icon: Truck, title: 'Hızlı Teslimat', desc: 'Türkiye geneli kargo' },

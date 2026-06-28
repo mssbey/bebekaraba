@@ -7,7 +7,7 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const product = getProduct(id);
+    const product = await getProduct(id);
     if (!product) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -25,7 +25,7 @@ export async function PATCH(
   const { id } = await params;
   try {
     const body = await request.json();
-    const updated = updateProduct(Number(id), body);
+    const updated = await updateProduct(Number(id), body);
     if (!updated) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -42,7 +42,7 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    const ok = deleteProduct(Number(id));
+    const ok = await deleteProduct(Number(id));
     if (!ok) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }

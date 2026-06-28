@@ -4,6 +4,32 @@ import path from 'path';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const STORE_FILE = path.join(DATA_DIR, 'store.json');
 
+// ── Storage backend selection ────────────────────────────────────────────────
+// Production (Vercel) → Upstash Redis REST (serverless-safe, persistent).
+// Local dev / no env  → JSON file on disk.
+const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '';
+const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
+const USE_REDIS = Boolean(REDIS_URL && REDIS_TOKEN);
+const REDIS_KEY = 'ba_store';
+
+async function redisCommand<T = unknown>(command: (string | number)[]): Promise<T> {
+  const res = await fetch(REDIS_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${REDIS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(command),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(`Redis error ${res.status}: ${await res.text()}`);
+  }
+  const data = (await res.json()) as { result: T; error?: string };
+  if (data.error) throw new Error(`Redis error: ${data.error}`);
+  return data.result;
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface Product {
@@ -59,38 +85,52 @@ function ensureDir() {
   }
 }
 
-function loadStore(): Store {
+async function loadStore(): Promise<Store> {
+  if (USE_REDIS) {
+    const raw = await redisCommand<string | null>(['GET', REDIS_KEY]);
+    if (raw) {
+      return (typeof raw === 'string' ? JSON.parse(raw) : raw) as Store;
+    }
+    const store = createInitialStore();
+    await saveStore(store);
+    return store;
+  }
+
   ensureDir();
   try {
     return JSON.parse(fs.readFileSync(STORE_FILE, 'utf8')) as Store;
   } catch {
     const store = createInitialStore();
-    saveStore(store);
+    await saveStore(store);
     return store;
   }
 }
 
-function saveStore(store: Store): void {
+async function saveStore(store: Store): Promise<void> {
+  if (USE_REDIS) {
+    await redisCommand(['SET', REDIS_KEY, JSON.stringify(store)]);
+    return;
+  }
   ensureDir();
   fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), 'utf8');
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
-export function getProducts(): Product[] {
-  return loadStore().products.sort((a, b) => a.sort_order - b.sort_order);
+export async function getProducts(): Promise<Product[]> {
+  return (await loadStore()).products.sort((a, b) => a.sort_order - b.sort_order);
 }
 
-export function getProduct(idOrSlug: string | number): Product | null {
-  const store = loadStore();
+export async function getProduct(idOrSlug: string | number): Promise<Product | null> {
+  const store = await loadStore();
   if (typeof idOrSlug === 'number' || /^\d+$/.test(String(idOrSlug))) {
     return store.products.find(p => p.id === Number(idOrSlug)) ?? null;
   }
   return store.products.find(p => p.slug === idOrSlug) ?? null;
 }
 
-export function updateProduct(id: number, data: Partial<Product>): Product | null {
-  const store = loadStore();
+export async function updateProduct(id: number, data: Partial<Product>): Promise<Product | null> {
+  const store = await loadStore();
   const idx = store.products.findIndex(p => p.id === id);
   if (idx === -1) return null;
   const allowed: (keyof Product)[] = ['name', 'slug', 'description', 'price', 'stock', 'category', 'brand', 'featured', 'gradient', 'image', 'sort_order'];
@@ -100,7 +140,7 @@ export function updateProduct(id: number, data: Partial<Product>): Product | nul
       (store.products[idx] as any)[key] = data[key];
     }
   }
-  saveStore(store);
+  await saveStore(store);
   return store.products[idx];
 }
 
@@ -113,8 +153,8 @@ function slugify(s: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-export function createProduct(data: Partial<Product>): Product {
-  const store = loadStore();
+export async function createProduct(data: Partial<Product>): Promise<Product> {
+  const store = await loadStore();
   const now = new Date().toISOString();
   const baseSlug = data.slug?.trim() || slugify(data.name || 'urun');
   let slug = baseSlug || 'urun';
@@ -139,16 +179,16 @@ export function createProduct(data: Partial<Product>): Product {
     image: data.image,
   };
   store.products.push(product);
-  saveStore(store);
+  await saveStore(store);
   return product;
 }
 
-export function deleteProduct(id: number): boolean {
-  const store = loadStore();
+export async function deleteProduct(id: number): Promise<boolean> {
+  const store = await loadStore();
   const idx = store.products.findIndex(p => p.id === id);
   if (idx === -1) return false;
   store.products.splice(idx, 1);
-  saveStore(store);
+  await saveStore(store);
   return true;
 }
 
@@ -163,8 +203,8 @@ export interface CreateOrderData {
   total: number;
 }
 
-export function createOrder(data: CreateOrderData): string {
-  const store = loadStore();
+export async function createOrder(data: CreateOrderData): Promise<string> {
+  const store = await loadStore();
 
   // Verify and decrement stock
   for (const item of data.items) {
@@ -201,25 +241,25 @@ export function createOrder(data: CreateOrderData): string {
   };
 
   store.orders.unshift(order);
-  saveStore(store);
+  await saveStore(store);
   return order_number;
 }
 
-export function getOrders(): Order[] {
-  return loadStore().orders;
+export async function getOrders(): Promise<Order[]> {
+  return (await loadStore()).orders;
 }
 
-export function updateOrderStatus(id: number, status: string): void {
-  const store = loadStore();
+export async function updateOrderStatus(id: number, status: string): Promise<void> {
+  const store = await loadStore();
   const order = store.orders.find(o => o.id === id);
   if (order) {
     order.status = status;
-    saveStore(store);
+    await saveStore(store);
   }
 }
 
-export function getStats() {
-  const store = loadStore();
+export async function getStats() {
+  const store = await loadStore();
   const total_products = store.products.length;
   const in_stock = store.products.filter(p => p.stock > 0).length;
   const sold = total_products - in_stock;

@@ -3,6 +3,8 @@ import ProductCard from '@/components/ProductCard';
 import Link from 'next/link';
 import { SlidersHorizontal, ArrowUpDown, Package } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 const CATEGORIES = [
   { value: '', label: 'Tüm Ürünler' },
   { value: 'bebek-arabasi', label: 'Bebek Arabaları' },
