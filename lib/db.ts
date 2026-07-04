@@ -1,62 +1,44 @@
-import fs from 'fs';
-import path from 'path';
+/**
+ * lib/db.ts — Prisma-backed data layer
+ * Dışa açık arayüz eski JSON sürümüyle uyumlu tutuldu,
+ * iç işlem Prisma üzerinden PostgreSQL'e gidiyor.
+ */
+import { prisma } from './prisma';
+import type { Condition, OrderStatus } from '@prisma/client';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const STORE_FILE = path.join(DATA_DIR, 'store.json');
-
-// ── Storage backend selection ────────────────────────────────────────────────
-// Production (Vercel) → Upstash Redis REST (serverless-safe, persistent).
-// Local dev / no env  → JSON file on disk.
-const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '';
-const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
-const USE_REDIS = Boolean(REDIS_URL && REDIS_TOKEN);
-const REDIS_KEY = 'ba_store';
-
-async function redisCommand<T = unknown>(command: (string | number)[]): Promise<T> {
-  const res = await fetch(REDIS_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${REDIS_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(command),
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    throw new Error(`Redis error ${res.status}: ${await res.text()}`);
-  }
-  const data = (await res.json()) as { result: T; error?: string };
-  if (data.error) throw new Error(`Redis error: ${data.error}`);
-  return data.result;
-}
-
-// ── Types ──────────────────────────────────────────────────────────────────
-
+// ── Tipler ────────────────────────────────────────────────────────────────────
 export interface Product {
-  id: number;
+  id: string;
   name: string;
   slug: string;
   description: string;
   price: number;
+  salePrice?: number | null;
   stock: number;
-  category: string;
+  category: string;   // slug for backward compat
+  categoryId: string;
   brand: string;
-  featured: number;
+  model?: string;
+  condition: string;
+  featured: boolean;
+  campaign: boolean;
   gradient: string;
   sort_order: number;
-  created_at: string;
   image?: string;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  created_at: string;
 }
 
 export interface OrderItem {
-  product_id: number;
+  product_id: string;
   product_name: string;
   price: number;
   quantity: number;
 }
 
 export interface Order {
-  id: number;
+  id: string;
   order_number: string;
   customer_name: string;
   customer_email: string;
@@ -70,128 +52,92 @@ export interface Order {
   created_at: string;
 }
 
-interface Store {
-  products: Product[];
-  orders: Order[];
-  nextOrderId: number;
-  nextProductId: number;
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function ensureDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
-
-async function loadStore(): Promise<Store> {
-  if (USE_REDIS) {
-    const raw = await redisCommand<string | null>(['GET', REDIS_KEY]);
-    if (raw) {
-      return (typeof raw === 'string' ? JSON.parse(raw) : raw) as Store;
-    }
-    const store = createInitialStore();
-    await saveStore(store);
-    return store;
-  }
-
-  ensureDir();
-  try {
-    return JSON.parse(fs.readFileSync(STORE_FILE, 'utf8')) as Store;
-  } catch {
-    const store = createInitialStore();
-    await saveStore(store);
-    return store;
-  }
-}
-
-async function saveStore(store: Store): Promise<void> {
-  if (USE_REDIS) {
-    await redisCommand(['SET', REDIS_KEY, JSON.stringify(store)]);
-    return;
-  }
-  ensureDir();
-  fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), 'utf8');
-}
-
-// ── Public API ─────────────────────────────────────────────────────────────
-
+// ── Ürün işlemleri ────────────────────────────────────────────────────────────
 export async function getProducts(): Promise<Product[]> {
-  return (await loadStore()).products.sort((a, b) => a.sort_order - b.sort_order);
+  const rows = await prisma.product.findMany({
+    include: { category: true },
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+  });
+  return rows.map(toProduct);
 }
 
-export async function getProduct(idOrSlug: string | number): Promise<Product | null> {
-  const store = await loadStore();
-  if (typeof idOrSlug === 'number' || /^\d+$/.test(String(idOrSlug))) {
-    return store.products.find(p => p.id === Number(idOrSlug)) ?? null;
-  }
-  return store.products.find(p => p.slug === idOrSlug) ?? null;
-}
-
-export async function updateProduct(id: number, data: Partial<Product>): Promise<Product | null> {
-  const store = await loadStore();
-  const idx = store.products.findIndex(p => p.id === id);
-  if (idx === -1) return null;
-  const allowed: (keyof Product)[] = ['name', 'slug', 'description', 'price', 'stock', 'category', 'brand', 'featured', 'gradient', 'image', 'sort_order'];
-  for (const key of allowed) {
-    if (data[key] !== undefined) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (store.products[idx] as any)[key] = data[key];
-    }
-  }
-  await saveStore(store);
-  return store.products[idx];
-}
-
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u')
-    .replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+export async function getProduct(idOrSlug: string): Promise<Product | null> {
+  const row = await prisma.product.findFirst({
+    where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+    include: { category: true },
+  });
+  return row ? toProduct(row) : null;
 }
 
 export async function createProduct(data: Partial<Product>): Promise<Product> {
-  const store = await loadStore();
-  const now = new Date().toISOString();
   const baseSlug = data.slug?.trim() || slugify(data.name || 'urun');
-  let slug = baseSlug || 'urun';
+  let slug = baseSlug;
   let n = 2;
-  while (store.products.some(p => p.slug === slug)) {
+  while (await prisma.product.findUnique({ where: { slug } })) {
     slug = `${baseSlug}-${n++}`;
   }
-  const maxSort = store.products.reduce((m, p) => Math.max(m, p.sort_order), 0);
-  const product: Product = {
-    id: store.nextProductId++,
-    name: data.name?.trim() || 'İsimsiz Ürün',
-    slug,
-    description: data.description || '',
-    price: data.price ?? 0,
-    stock: data.stock ?? 1,
-    category: data.category || 'bebek-arabasi',
-    brand: data.brand || 'Stokke',
-    featured: data.featured ?? 0,
-    gradient: data.gradient || 'grad-blue',
-    sort_order: data.sort_order ?? maxSort + 1,
-    created_at: now,
-    image: data.image,
-  };
-  store.products.push(product);
-  await saveStore(store);
-  return product;
+
+  const catId = data.categoryId || (await defaultCategoryId(data.category));
+
+  const row = await prisma.product.create({
+    data: {
+      name: data.name || 'İsimsiz Ürün',
+      slug,
+      description: data.description || '',
+      price: data.price || 0,
+      salePrice: data.salePrice ?? null,
+      stock: data.stock ?? 1,
+      categoryId: catId,
+      brand: data.brand || '',
+      model: data.model,
+      condition: (data.condition as Condition) || 'VERY_GOOD',
+      featured: data.featured ?? false,
+      campaign: data.campaign ?? false,
+      gradient: data.gradient || 'grad-blue',
+      sortOrder: data.sort_order ?? 0,
+      image: data.image ?? null,
+      seoTitle: data.seoTitle ?? null,
+      seoDescription: data.seoDescription ?? null,
+    },
+    include: { category: true },
+  });
+  return toProduct(row);
 }
 
-export async function deleteProduct(id: number): Promise<boolean> {
-  const store = await loadStore();
-  const idx = store.products.findIndex(p => p.id === id);
-  if (idx === -1) return false;
-  store.products.splice(idx, 1);
-  await saveStore(store);
+export async function updateProduct(id: string, data: Partial<Product>): Promise<Product | null> {
+  const update: Record<string, unknown> = {};
+  if (data.name !== undefined) update.name = data.name;
+  if (data.slug !== undefined) update.slug = data.slug;
+  if (data.description !== undefined) update.description = data.description;
+  if (data.price !== undefined) update.price = data.price;
+  if (data.salePrice !== undefined) update.salePrice = data.salePrice;
+  if (data.stock !== undefined) update.stock = data.stock;
+  if (data.brand !== undefined) update.brand = data.brand;
+  if (data.model !== undefined) update.model = data.model;
+  if (data.condition !== undefined) update.condition = data.condition as Condition;
+  if (data.featured !== undefined) update.featured = data.featured;
+  if (data.campaign !== undefined) update.campaign = data.campaign;
+  if (data.gradient !== undefined) update.gradient = data.gradient;
+  if (data.sort_order !== undefined) update.sortOrder = data.sort_order;
+  if (data.image !== undefined) update.image = data.image;
+  if (data.categoryId !== undefined) update.categoryId = data.categoryId;
+  if (data.seoTitle !== undefined) update.seoTitle = data.seoTitle;
+  if (data.seoDescription !== undefined) update.seoDescription = data.seoDescription;
+
+  const row = await prisma.product.update({
+    where: { id },
+    data: update,
+    include: { category: true },
+  });
+  return toProduct(row);
+}
+
+export async function deleteProduct(id: string): Promise<boolean> {
+  await prisma.product.delete({ where: { id } });
   return true;
 }
 
+// ── Sipariş işlemleri ─────────────────────────────────────────────────────────
 export interface CreateOrderData {
   customer_name: string;
   customer_email: string;
@@ -204,274 +150,172 @@ export interface CreateOrderData {
 }
 
 export async function createOrder(data: CreateOrderData): Promise<string> {
-  const store = await loadStore();
-
-  // Verify and decrement stock
+  // Stok kontrolü
   for (const item of data.items) {
-    const product = store.products.find(p => p.id === item.product_id);
-    if (!product || product.stock < item.quantity) {
+    const p = await prisma.product.findUnique({ where: { id: item.product_id } });
+    if (!p || p.stock < item.quantity) {
       throw new Error(`"${item.product_name}" için yeterli stok yok.`);
     }
   }
 
-  // Decrement stock
+  // Stok düşür
   for (const item of data.items) {
-    const product = store.products.find(p => p.id === item.product_id)!;
-    product.stock = Math.max(0, product.stock - item.quantity);
+    await prisma.product.update({
+      where: { id: item.product_id },
+      data: { stock: { decrement: item.quantity } },
+    });
   }
 
   const now = new Date();
   const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   const rand = Math.floor(Math.random() * 9000 + 1000);
-  const order_number = `BA-${ymd}-${rand}`;
+  const orderNumber = `BA-${ymd}-${rand}`;
 
-  const order: Order = {
-    id: store.nextOrderId++,
-    order_number,
-    customer_name: data.customer_name,
-    customer_email: data.customer_email,
-    customer_phone: data.customer_phone || '',
-    customer_address: data.customer_address,
-    city: data.city || '',
-    notes: data.notes || '',
-    total: data.total,
-    status: 'beklemede',
-    items: data.items,
-    created_at: now.toISOString(),
-  };
+  // Müşteri bul veya oluştur
+  let customerId: string | null = null;
+  if (data.customer_email) {
+    const customer = await prisma.customer.upsert({
+      where: { email: data.customer_email },
+      update: { name: data.customer_name, phone: data.customer_phone || undefined, city: data.city },
+      create: {
+        name: data.customer_name,
+        email: data.customer_email,
+        phone: data.customer_phone || undefined,
+        city: data.city,
+      },
+    });
+    customerId = customer.id;
+  }
 
-  store.orders.unshift(order);
-  await saveStore(store);
-  return order_number;
+  await prisma.order.create({
+    data: {
+      orderNumber,
+      customerId,
+      guestName: customerId ? null : data.customer_name,
+      guestEmail: customerId ? null : data.customer_email,
+      guestPhone: customerId ? null : data.customer_phone,
+      address: data.customer_address,
+      city: data.city,
+      notes: data.notes || null,
+      total: data.total,
+      status: 'PENDING',
+      items: {
+        create: data.items.map((i) => ({
+          productId: i.product_id,
+          name: i.product_name,
+          price: i.price,
+          quantity: i.quantity,
+        })),
+      },
+    },
+  });
+
+  return orderNumber;
 }
 
 export async function getOrders(): Promise<Order[]> {
-  return (await loadStore()).orders;
+  const rows = await prisma.order.findMany({
+    include: { items: true, customer: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  return rows.map(toOrder);
 }
 
-export async function updateOrderStatus(id: number, status: string): Promise<void> {
-  const store = await loadStore();
-  const order = store.orders.find(o => o.id === id);
-  if (order) {
-    order.status = status;
-    await saveStore(store);
-  }
+export async function updateOrderStatus(id: string, status: string): Promise<void> {
+  await prisma.order.update({
+    where: { id },
+    data: { status: status as OrderStatus },
+  });
 }
 
+// ── Stats ─────────────────────────────────────────────────────────────────────
 export async function getStats() {
-  const store = await loadStore();
-  const total_products = store.products.length;
-  const in_stock = store.products.filter(p => p.stock > 0).length;
-  const sold = total_products - in_stock;
-  const total_orders = store.orders.length;
-  const total_revenue = store.orders.reduce((s, o) => s + o.total, 0);
-  const pending_orders = store.orders.filter(o => o.status === 'beklemede').length;
-  return { total_products, in_stock, sold, total_orders, total_revenue, pending_orders };
-}
-
-// ── Seed Data ──────────────────────────────────────────────────────────────
-
-function createInitialStore(): Store {
-  const now = new Date().toISOString();
-  const products: Product[] = SEED_PRODUCTS.map((p, i) => ({
-    ...p,
-    id: i + 1,
-    stock: 1,
-    brand: p.brand ?? 'Stokke',
-    created_at: now,
-  }));
+  const [total_products, in_stock, total_orders, revenue, pending_orders] = await Promise.all([
+    prisma.product.count(),
+    prisma.product.count({ where: { stock: { gt: 0 } } }),
+    prisma.order.count(),
+    prisma.order.aggregate({ _sum: { total: true } }),
+    prisma.order.count({ where: { status: 'PENDING' } }),
+  ]);
 
   return {
-    products,
-    orders: [],
-    nextOrderId: 1,
-    nextProductId: products.length + 1,
+    total_products,
+    in_stock,
+    sold: total_products - in_stock,
+    total_orders,
+    total_revenue: revenue._sum.total ?? 0,
+    pending_orders,
   };
 }
 
-interface SeedProduct {
-  name: string;
-  slug: string;
-  description: string;
-  price: number;
-  category: string;
-  brand?: string;
-  featured: number;
-  gradient: string;
-  sort_order: number;
+// ── Dönüştürücüler ────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toProduct(row: any): Product {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description || '',
+    price: row.price,
+    salePrice: row.salePrice,
+    stock: row.stock,
+    category: row.category?.slug || '',
+    categoryId: row.categoryId,
+    brand: row.brand || '',
+    model: row.model,
+    condition: row.condition,
+    featured: row.featured,
+    campaign: row.campaign,
+    gradient: row.gradient || 'grad-blue',
+    sort_order: row.sortOrder,
+    image: row.image ?? undefined,
+    seoTitle: row.seoTitle,
+    seoDescription: row.seoDescription,
+    created_at: row.createdAt?.toISOString?.() || new Date().toISOString(),
+  };
 }
 
-const SEED_PRODUCTS: SeedProduct[] = [
-  {
-    name: 'Stokke Travel Sistem',
-    slug: 'stokke-travel-sistem',
-    description: 'Yeni doğan bebeğiniz için ideal başlangıç seti. Portbebe ve şasi bir arada, ergonomik tasarım ve yüksek güvenlik standartları. Az kullanılmış, temiz ve bakımlı durumda. Doğumdan 9 kg\'a kadar kullanım.',
-    price: 17500,
-    category: 'bebek-arabasi',
-    featured: 1,
-    gradient: 'grad-blue',
-    sort_order: 1,
-  },
-  {
-    name: 'Stokke v5 + Cybex Aton G Oto Koltuğu',
-    slug: 'stokke-v5-cybex-aton-g',
-    description: 'Stokke Xplory v5 bebek arabası ve Cybex Aton G 360° dönen oto koltuğunun eşsiz kombinasyonu. Hem araçta hem de sokakta maksimum güvenlik ve konfor. Tam set, mükemmel durumda.',
-    price: 23000,
-    category: 'bebek-arabasi',
-    featured: 1,
-    gradient: 'grad-indigo',
-    sort_order: 2,
-  },
-  {
-    name: 'Stokke Portbebeli Set',
-    slug: 'stokke-portbebeli-set-1',
-    description: 'Stokke bebek arabası portbebe adaptörü ve portbebe dahil tam set. Yenidoğandan 6 aya kadar ideal kullanım. Bebeğinizi size yakın tutarken özgürce dolaşın.',
-    price: 17500,
-    category: 'bebek-arabasi',
-    featured: 1,
-    gradient: 'grad-purple',
-    sort_order: 3,
-  },
-  {
-    name: 'Stokke Portbebeli Set (Krem)',
-    slug: 'stokke-portbebeli-set-krem',
-    description: 'Krem rengi kumaşıyla zarif Stokke portbebeli set. Yenidoğan ile birlikte dolaşmak için ergonomik tasarım. Kumaşlar yıkanmış ve temiz.',
-    price: 17500,
-    category: 'bebek-arabasi',
-    featured: 0,
-    gradient: 'grad-pink',
-    sort_order: 4,
-  },
-  {
-    name: 'Siyah Stokke Portbebeli Set',
-    slug: 'siyah-stokke-portbebeli-set',
-    description: 'Şık siyah renk seçeneğiyle Stokke bebek arabası portbebe seti. Modern ve zarif görünüm, sağlam alüminyum şasi. Her yerde dikkat çekici tasarım.',
-    price: 17500,
-    category: 'bebek-arabasi',
-    featured: 0,
-    gradient: 'grad-dark',
-    sort_order: 5,
-  },
-  {
-    name: 'Stokke Bebek Arabası',
-    slug: 'stokke-bebek-arabasi',
-    description: 'Klasik Stokke bebek arabası. Dayanıklı alüminyum çerçeve ve premium kumaş döşeme. Yenidoğandan 3 yaşa kadar kullanım. Yüksek konumlu oturma pozisyonu ile bebeğiniz trafikten uzakta.',
-    price: 16000,
-    category: 'bebek-arabasi',
-    featured: 1,
-    gradient: 'grad-teal',
-    sort_order: 6,
-  },
-  {
-    name: 'Stokke Travel Sistem Bebek Arabası',
-    slug: 'stokke-travel-sistem-bebek-arabasi',
-    description: 'Komple Stokke Travel Sistem bebek arabası. Portbebe adaptörü ile yenidoğandan itibaren kullanılabilir. Hava limanı dostu, katlanabilir şasi. Pratik ve konforlu.',
-    price: 18000,
-    category: 'bebek-arabasi',
-    featured: 0,
-    gradient: 'grad-blue',
-    sort_order: 7,
-  },
-  {
-    name: 'Lacivert Stokke Bebek Arabası',
-    slug: 'lacivert-stokke-bebek-arabasi',
-    description: 'Zarif lacivert rengiyle Stokke bebek arabası. Kaliteli malzeme ve uzun ömürlü tasarım. Yüksek konumlu oturma, ayarlanabilir sırtlık ve geniş alışveriş sepeti.',
-    price: 17000,
-    category: 'bebek-arabasi',
-    featured: 0,
-    gradient: 'grad-navy',
-    sort_order: 8,
-  },
-  {
-    name: 'Stokke Full Set',
-    slug: 'stokke-full-set',
-    description: 'Her şeyin dahil olduğu Stokke Full Set! Şasi, oturak, portbebe adaptörü ve yağmurluk bir arada. Hepsini ayrı ayrı almak yerine tam seti alın, çok daha ekonomik.',
-    price: 21000,
-    category: 'bebek-arabasi',
-    featured: 1,
-    gradient: 'grad-green',
-    sort_order: 9,
-  },
-  {
-    name: 'Stokke v5 Full Full Set',
-    slug: 'stokke-v5-full-full-set',
-    description: 'Stokke Xplory v5 tüm aksesuarlarıyla eksiksiz set. Şasi, oturak, portbebe, bardaklık, sineklik ve yağmurluk dahil. En kapsamlı Stokke paketi, mükemmel durumda.',
-    price: 22000,
-    category: 'bebek-arabasi',
-    featured: 1,
-    gradient: 'grad-indigo',
-    sort_order: 10,
-  },
-  {
-    name: 'Stokke Xplory Yenidoğan Modüllü',
-    slug: 'stokke-xplory-yenidogan',
-    description: 'Stokke Xplory\'nin yenidoğan modülüyle donatılmış özel versiyonu. Bebeğiniz doğumdan itibaren ebeveynine yakın, güvende. Yüksek konumlu tasarım sayesinde göz teması kesintisiz.',
-    price: 19800,
-    category: 'bebek-arabasi',
-    featured: 1,
-    gradient: 'grad-purple',
-    sort_order: 11,
-  },
-  {
-    name: 'Cybex Aton G 360° Dönen Oto Koltuğu',
-    slug: 'cybex-aton-g-360',
-    description: '360 derece dönen yenilikçi Cybex Aton G oto koltuğu. Bebeğinizi kolayca takıp çıkarın, hem yüze karşı hem yüze doğru kullanım. Doğumdan 13 kg\'a kadar ideal güvenlik.',
-    price: 11000,
-    category: 'oto-koltuğu',
-    brand: 'Cybex',
-    featured: 1,
-    gradient: 'grad-orange',
-    sort_order: 12,
-  },
-  {
-    name: 'Stokke Besafe izi Sleep Oto Koltuğu',
-    slug: 'stokke-besafe-izi-sleep',
-    description: 'Besafe izi Sleep tam yatan oto koltuğu. Bebeğinizin uzun yolculuklarda rahatça uyuyabileceği özel tasarım. Yatar pozisyon, ekstra koruma ve premium kumaş.',
-    price: 7500,
-    category: 'oto-koltuğu',
-    featured: 0,
-    gradient: 'grad-teal',
-    sort_order: 13,
-  },
-  {
-    name: 'Korbell Bebek Bezi Çöp Kovası',
-    slug: 'korbell-cop-kovasi',
-    description: 'Kötü kokuları kilitleyen Korbell bebek bezi çöp kovası. Özel koku engelleme sistemiyle bebek odanızı her zaman taze tutar. Kolay kullanım, büyük kapasite.',
-    price: 999,
-    category: 'aksesuar',
-    brand: 'Korbell',
-    featured: 0,
-    gradient: 'grad-pink',
-    sort_order: 14,
-  },
-  {
-    name: 'Stokke Bardaklık',
-    slug: 'stokke-bardaklik',
-    description: 'Stokke bebek arabası için özel tasarım bardaklık. Şasi üzerine kolayca monte edilir, 360° döner. Hem ebeveyn hem çocuk bardakları için ideal boyut.',
-    price: 1850,
-    category: 'aksesuar',
-    featured: 0,
-    gradient: 'grad-green',
-    sort_order: 15,
-  },
-  {
-    name: 'Stokke Sineklik',
-    slug: 'stokke-sineklik',
-    description: 'Stokke bebek arabası için tasarlanmış kaliteli sineklik. Çok ince file yapısı ile hava sirkülasyonunu bozmadan bebeğinizi böceklerden korur. Kolay takılıp çıkarılır.',
-    price: 999,
-    category: 'aksesuar',
-    featured: 0,
-    gradient: 'grad-navy',
-    sort_order: 16,
-  },
-  {
-    name: 'Stokke Xplory Yağmurluk',
-    slug: 'stokke-xplory-yagmurluk',
-    description: 'Stokke Xplory için üretilmiş şeffaf yağmurluk. Bebeğinizi her hava koşulunda korur. PVC içermeyen güvenli malzeme. Katlanabilir ve taşınabilir.',
-    price: 1750,
-    category: 'aksesuar',
-    featured: 0,
-    gradient: 'grad-blue',
-    sort_order: 17,
-  },
-];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toOrder(row: any): Order {
+  const name = row.customer?.name || row.guestName || 'Misafir';
+  const email = row.customer?.email || row.guestEmail || '';
+  const phone = row.customer?.phone || row.guestPhone || '';
+  return {
+    id: row.id,
+    order_number: row.orderNumber,
+    customer_name: name,
+    customer_email: email,
+    customer_phone: phone,
+    customer_address: row.address,
+    city: row.city,
+    notes: row.notes || '',
+    total: row.total,
+    status: row.status,
+    items: (row.items || []).map((i: { productId: string; name: string; price: number; quantity: number }) => ({
+      product_id: i.productId,
+      product_name: i.name,
+      price: i.price,
+      quantity: i.quantity,
+    })),
+    created_at: row.createdAt?.toISOString?.() || new Date().toISOString(),
+  };
+}
+
+// ── Yardımcılar ───────────────────────────────────────────────────────────────
+export function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u')
+    .replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+async function defaultCategoryId(slug?: string): Promise<string> {
+  const target = slug || 'bebek-arabasi';
+  const cat = await prisma.category.findFirst({ where: { slug: target } });
+  if (cat) return cat.id;
+  const first = await prisma.category.findFirst({ orderBy: { sortOrder: 'asc' } });
+  if (first) return first.id;
+  throw new Error('Hiç kategori bulunamadı. Önce `npm run db:seed` çalıştırın.');
+}

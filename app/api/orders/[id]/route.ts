@@ -1,30 +1,69 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import { updateOrderStatus } from '@/lib/db';
-import { cookies } from 'next/headers';
+import { orderStatusSchema } from '@/lib/validations';
+import { sendStatusUpdateMail } from '@/lib/mail';
 
-const ADMIN_TOKEN = 'ba_admin_2025_secure';
-const VALID_STATUSES = ['beklemede', 'onaylandi', 'kargoda', 'teslim_edildi', 'iptal'];
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const cookieStore = await cookies();
-  const session = cookieStore.get('admin_session')?.value;
-  if (session !== ADMIN_TOKEN) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const { id } = await params;
+  const order = await prisma.order.findUnique({
+    where: { id },
+    include: { items: { include: { product: true } }, customer: true },
+  });
+
+  if (!order) return NextResponse.json({ error: 'Bulunamadı' }, { status: 404 });
+  return NextResponse.json(order);
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
 
   const { id } = await params;
   try {
-    const { status } = await request.json();
-    if (!VALID_STATUSES.includes(status)) {
-      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    const body = await req.json();
+    const parsed = orderStatusSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Geçersiz durum' }, { status: 400 });
     }
-    await updateOrderStatus(Number(id), status);
+
+    await updateOrderStatus(id, parsed.data.status);
+
+    // Durum maili gönder
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { customer: true },
+    });
+
+    if (order) {
+      const email = order.customer?.email || order.guestEmail;
+      const name = order.customer?.name || order.guestName || 'Müşteri';
+      if (email && parsed.data.status !== 'PENDING') {
+        sendStatusUpdateMail({
+          orderNumber: order.orderNumber,
+          customerEmail: email,
+          customerName: name,
+          status: parsed.data.status,
+        }).catch(console.error);
+      }
+    }
+
     return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: 'Sunucu hatası' }, { status: 500 });
   }
+}
+
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
+
+  const { id } = await params;
+  await prisma.order.delete({ where: { id } });
+  return NextResponse.json({ success: true });
 }

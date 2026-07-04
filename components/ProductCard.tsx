@@ -7,7 +7,7 @@ import { useCart } from './CartProvider';
 import { useFavorites } from './FavoritesProvider';
 
 interface Product {
-  id: number;
+  id: string;
   name: string;
   slug: string;
   price: number;
@@ -58,13 +58,13 @@ const ACCESSORY_SVG = (
 );
 
 function getIllustration(category: string) {
-  if (category === 'oto-koltuğu') return CARSEAT_SVG;
+  if (category === 'oto-koltugu') return CARSEAT_SVG;
   if (category === 'aksesuar') return ACCESSORY_SVG;
   return STROLLER_SVG;
 }
 
 function getCategoryLabel(category: string) {
-  if (category === 'oto-koltuğu') return 'Oto Koltuğu';
+  if (category === 'oto-koltugu') return 'Oto Koltuğu';
   if (category === 'aksesuar') return 'Aksesuar';
   return 'Bebek Arabası';
 }

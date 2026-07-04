@@ -69,8 +69,8 @@ const config: Config = {
         border: '#EDE9E4',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-playfair)', 'Georgia', 'serif'],
       },
       fontSize: {
         '2xs': ['10px', '14px'],

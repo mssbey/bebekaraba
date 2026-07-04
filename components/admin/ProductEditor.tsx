@@ -5,20 +5,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, Sparkles, Search as SeoIcon, Link2, ExternalLink } from 'lucide-react';
 
 export interface ProductForm {
-  id?: number;
+  id?: string;
   name: string; slug: string; description: string;
   price: number; stock: number; category: string; brand: string;
-  featured: number; gradient: string; image?: string;
+  featured: boolean; gradient: string; image?: string;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  'bebek-arabasi': 'Bebek Arabası', 'oto-koltuğu': 'Oto Koltuğu', 'aksesuar': 'Aksesuar',
+  'bebek-arabasi': 'Bebek Arabası', 'oto-koltugu': 'Oto Koltuğu', 'aksesuar': 'Aksesuar',
 };
 const GRADIENTS = ['grad-blue', 'grad-indigo', 'grad-purple', 'grad-pink', 'grad-dark', 'grad-teal', 'grad-navy', 'grad-green', 'grad-orange'];
 
 const EMPTY: ProductForm = {
   name: '', slug: '', description: '', price: 0, stock: 1,
-  category: 'bebek-arabasi', brand: 'Stokke', featured: 0, gradient: 'grad-blue', image: '',
+  category: 'bebek-arabasi', brand: 'Stokke', featured: false, gradient: 'grad-blue', image: '',
 };
 
 function seoScore(f: ProductForm) {
@@ -217,8 +217,8 @@ export default function ProductEditor({ open, initial, onClose, onSaved, notify 
               <Section title="Durum & SEO">
                 <Field label="Öne Çıkan Ürün">
                   <div className="flex gap-2">
-                    {[{ v: 1, l: 'Evet' }, { v: 0, l: 'Hayır' }].map(o => (
-                      <button key={o.v} type="button" onClick={() => set('featured', o.v)}
+                    {[{ v: true, l: 'Evet' }, { v: false, l: 'Hayır' }].map(o => (
+                      <button key={String(o.v)} type="button" onClick={() => set('featured', o.v)}
                         className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${form.featured === o.v ? 'bg-brand-500 text-white border-brand-500' : 'ad-surface border-[color:var(--ad-border)] ad-muted'}`}>
                         {o.l}
                       </button>

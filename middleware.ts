@@ -1,36 +1,25 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { auth } from '@/lib/auth';
 
-const ADMIN_TOKEN = 'ba_admin_2025_secure';
+export default auth((req) => {
+  const { pathname } = req.nextUrl;
+  const isLoggedIn = !!req.auth;
 
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  // Admin paneli — giriş gerektir
   const isAdminRoute = pathname.startsWith('/admin');
   const isLoginPage = pathname === '/admin/login';
-  const isAdminApi = pathname.startsWith('/api/admin');
-  const isAuthApi = pathname === '/api/admin/auth';
-  const sessionToken = request.cookies.get('admin_session')?.value;
-  const isAuthenticated = sessionToken === ADMIN_TOKEN;
 
-  if (isAdminRoute && !isLoginPage && !isAuthenticated) {
-    return NextResponse.redirect(new URL('/admin/login', request.url));
+  if (isAdminRoute && !isLoginPage && !isLoggedIn) {
+    return Response.redirect(new URL('/admin/login', req.url));
   }
 
-  if (isAdminApi && !isAuthApi && !isAuthenticated) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (isLoginPage && isLoggedIn) {
+    return Response.redirect(new URL('/admin', req.url));
   }
-
-  // Protect product mutations (create/update/delete); GET stays public
-  const isProductApi = pathname.startsWith('/api/products');
-  if (isProductApi && request.method !== 'GET' && !isAuthenticated) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  return NextResponse.next();
-}
+});
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*', '/api/products/:path*'],
+  matcher: [
+    '/admin/:path*',
+    // API'leri middleware'de korumak yerine route handler'da kontrol ediyoruz
+  ],
 };
-
-export { ADMIN_TOKEN };

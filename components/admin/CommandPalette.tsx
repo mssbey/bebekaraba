@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, CornerDownLeft, Sun, Moon, LogOut, ExternalLink } from 'lucide-react';
+import { signOut } from 'next-auth/react';
 import { ALL_ITEMS } from '@/lib/admin-nav';
 import { useAdmin } from './AdminProvider';
 
@@ -27,7 +28,7 @@ export default function CommandPalette() {
     const actions: Cmd[] = [
       { id: 'theme', label: 'Temayı Değiştir (Açık/Koyu)', group: 'Eylemler', icon: <Sun size={16} />, run: toggleTheme },
       { id: 'site', label: 'Siteyi Yeni Sekmede Aç', group: 'Eylemler', icon: <ExternalLink size={16} />, run: () => window.open('/', '_blank') },
-      { id: 'logout', label: 'Çıkış Yap', group: 'Eylemler', icon: <LogOut size={16} />, run: () => { window.location.href = '/api/admin/logout'; } },
+      { id: 'logout', label: 'Çıkış Yap', group: 'Eylemler', icon: <LogOut size={16} />, run: () => signOut({ callbackUrl: '/admin/login' }) },
     ];
     return [...nav, ...actions];
   }, [router, toggleTheme]);

@@ -1,58 +1,68 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import { createOrder, getOrders } from '@/lib/db';
-import { cookies } from 'next/headers';
+import { checkoutSchema } from '@/lib/validations';
+import { sendOrderConfirmation, sendNewOrderNotification } from '@/lib/mail';
 
-const ADMIN_TOKEN = 'ba_admin_2025_secure';
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const session = cookieStore.get('admin_session')?.value;
-  if (session !== ADMIN_TOKEN) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
 
-  try {
-    const orders = await getOrders();
-    return NextResponse.json({ orders });
-  } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
-  }
+  const orders = await getOrders();
+  return NextResponse.json(orders);
 }
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const body = await request.json();
-    const {
-      customer_name,
-      customer_email,
-      customer_phone = '',
-      customer_address,
-      city = '',
-      notes = '',
-      items,
-      total,
-    } = body;
-
-    if (!customer_name || !customer_email || !customer_address || !items?.length) {
-      return NextResponse.json({ error: 'Eksik bilgi' }, { status: 400 });
+    const body = await req.json();
+    const parsed = checkoutSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Geçersiz form verisi', details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const order_number = await createOrder({
+    const { customer_name, customer_email, customer_phone, customer_address, city, notes } = parsed.data;
+
+    if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
+      return NextResponse.json({ error: 'Sepet boş' }, { status: 400 });
+    }
+
+    const orderNumber = await createOrder({
       customer_name,
       customer_email,
-      customer_phone,
+      customer_phone: customer_phone || '',
       customer_address,
       city,
-      notes,
-      items,
-      total,
+      notes: notes || '',
+      items: body.items,
+      total: body.total,
     });
 
-    return NextResponse.json({ success: true, order_number }, { status: 201 });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Server error';
-    const status = message.includes('stok') ? 409 : 500;
-    return NextResponse.json({ error: message }, { status });
+    // E-posta bildirimleri (hata olursa siparişi engelleme)
+    const mailData = {
+      orderNumber,
+      customerName: customer_name,
+      customerEmail: customer_email,
+      items: body.items.map((i: { product_name: string; price: number; quantity: number }) => ({
+        name: i.product_name,
+        price: i.price,
+        quantity: i.quantity,
+      })),
+      total: body.total,
+      address: customer_address,
+      city,
+    };
+
+    Promise.allSettled([
+      sendOrderConfirmation(mailData),
+      sendNewOrderNotification(mailData),
+    ]).catch(console.error);
+
+    return NextResponse.json({ success: true, orderNumber }, { status: 201 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Sunucu hatası';
+    console.error(e);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

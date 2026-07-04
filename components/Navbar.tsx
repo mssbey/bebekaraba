@@ -10,9 +10,9 @@ import { useFavorites } from './FavoritesProvider';
 const NAV_LINKS = [
   { href: '/urunler', label: 'Tüm Ürünler' },
   { href: '/urunler?kategori=bebek-arabasi', label: 'Bebek Arabaları' },
-  { href: '/urunler?kategori=oto-koltu%C4%9Fu', label: 'Oto Koltukları' },
+  { href: '/urunler?kategori=oto-koltugu', label: 'Oto Koltukları' },
   { href: '/urunler?kategori=aksesuar', label: 'Aksesuarlar' },
-  { href: '/urunler', label: 'Kampanyalar' },
+  { href: '/blog', label: 'Blog' },
 ];
 
 export default function Navbar() {

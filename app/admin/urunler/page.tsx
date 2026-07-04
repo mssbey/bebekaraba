@@ -11,9 +11,19 @@ import { useAdmin } from '@/components/admin/AdminProvider';
 import ProductEditor, { type ProductForm, CATEGORY_LABELS } from '@/components/admin/ProductEditor';
 
 interface Product {
-  id: number; name: string; slug: string; price: number; stock: number;
-  category: string; brand: string; featured: number; description: string;
-  gradient: string; image?: string; sort_order: number;
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  stock: number;
+  category: string;
+  brand: string;
+  featured: boolean;
+  description: string;
+  gradient: string;
+  image?: string;
+  sort_order: number;
+  created_at: string;
 }
 
 type SortKey = 'manual' | 'price-asc' | 'price-desc' | 'stock' | 'name' | 'newest';
@@ -27,7 +37,7 @@ export default function AdminUrunlerPage() {
   const [stockF, setStockF] = useState('all');
   const [featF, setFeatF] = useState('all');
   const [sort, setSort] = useState<SortKey>('manual');
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<ProductForm | null>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -39,13 +49,12 @@ export default function AdminUrunlerPage() {
     setLoading(true);
     const res = await fetch('/api/products');
     const data = await res.json();
-    setProducts(data.products ?? []);
+    setProducts(Array.isArray(data) ? data : (data.products ?? []));
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
-  // open editor for new product via ?new=1
   useEffect(() => {
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === '1') {
       setEditing(null); setEditorOpen(true);
@@ -64,44 +73,58 @@ export default function AdminUrunlerPage() {
     }
     if (cat !== 'all') list = list.filter(p => p.category === cat);
     if (stockF !== 'all') list = list.filter(p =>
-      stockF === 'out' ? p.stock === 0 : stockF === 'low' ? p.stock > 0 && p.stock <= 1 : p.stock > 0);
-    if (featF !== 'all') list = list.filter(p => (featF === 'yes' ? p.featured === 1 : p.featured === 0));
+      stockF === 'out' ? p.stock === 0 : stockF === 'low' ? p.stock > 0 && p.stock <= 2 : p.stock > 0);
+    if (featF !== 'all') list = list.filter(p => featF === 'yes' ? p.featured : !p.featured);
     switch (sort) {
       case 'price-asc': list.sort((a, b) => a.price - b.price); break;
       case 'price-desc': list.sort((a, b) => b.price - a.price); break;
       case 'stock': list.sort((a, b) => a.stock - b.stock); break;
       case 'name': list.sort((a, b) => a.name.localeCompare(b.name, 'tr')); break;
-      case 'newest': list.sort((a, b) => b.id - a.id); break;
+      case 'newest': list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()); break;
       default: list.sort((a, b) => a.sort_order - b.sort_order);
     }
     return list;
   }, [products, q, cat, stockF, featF, sort]);
 
   const allSelected = visible.length > 0 && visible.every(p => selected.has(p.id));
-  const toggleSel = (id: number) => setSelected(prev => {
+  const toggleSel = (id: string) => setSelected(prev => {
     const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
   });
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visible.map(p => p.id)));
   const clearSel = () => setSelected(new Set());
 
-  // persist drag order
   const onReorder = async (newOrder: Product[]) => {
     setProducts(newOrder.map((p, i) => ({ ...p, sort_order: i + 1 })));
     await Promise.all(newOrder.map((p, i) =>
       fetch(`/api/products/${p.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sort_order: i + 1 }) })));
   };
 
-  const patch = (id: number, body: Partial<Product>) =>
+  const patch = (id: string, body: object) =>
     fetch(`/api/products/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-  const openEdit = (p: Product) => { setEditing(p); setEditorOpen(true); };
+  const openEdit = (p: Product) => {
+    setEditing({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      description: p.description,
+      price: p.price,
+      stock: p.stock,
+      category: p.category,
+      brand: p.brand,
+      featured: p.featured,
+      gradient: p.gradient,
+      image: p.image,
+    });
+    setEditorOpen(true);
+  };
   const openNew = () => { setEditing(null); setEditorOpen(true); };
 
   const duplicate = async (p: Product) => {
-    const { ...rest } = p;
     await fetch('/api/products', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...rest, id: undefined, name: `${p.name} (Kopya)`, slug: '' }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `${p.name} (Kopya)`, slug: '', description: p.description, price: p.price, stock: p.stock, category: p.category, brand: p.brand, featured: false, gradient: p.gradient }),
     });
     await fetchProducts();
     notify('success', 'Ürün kopyalandı');
@@ -115,7 +138,6 @@ export default function AdminUrunlerPage() {
     notify('success', 'Ürün silindi');
   };
 
-  // ── bulk actions ──
   const bulkPrice = async () => {
     const v = prompt('Yeni fiyat (₺) — seçili tüm ürünlere uygulanır:');
     if (v == null || isNaN(Number(v))) return;
@@ -123,13 +145,13 @@ export default function AdminUrunlerPage() {
     await fetchProducts(); notify('success', `${selected.size} ürün fiyatı güncellendi`);
   };
   const bulkStock = async () => {
-    const v = prompt('Yeni stok adedi — seçili tüm ürünlere uygulanır:');
+    const v = prompt('Yeni stok adedi:');
     if (v == null || isNaN(Number(v))) return;
     await Promise.all([...selected].map(id => patch(id, { stock: Number(v) })));
     await fetchProducts(); notify('success', `${selected.size} ürün stoğu güncellendi`);
   };
   const bulkCategory = async () => {
-    const v = prompt('Yeni kategori (bebek-arabasi / oto-koltuğu / aksesuar):');
+    const v = prompt('Yeni kategori (bebek-arabasi / oto-koltugu / aksesuar):');
     if (!v || !CATEGORY_LABELS[v]) { notify('error', 'Geçersiz kategori'); return; }
     await Promise.all([...selected].map(id => patch(id, { category: v })));
     await fetchProducts(); notify('success', `${selected.size} ürün kategorisi güncellendi`);
@@ -137,8 +159,9 @@ export default function AdminUrunlerPage() {
   const bulkDuplicate = async () => {
     const items = products.filter(p => selected.has(p.id));
     await Promise.all(items.map(p => fetch('/api/products', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...p, id: undefined, name: `${p.name} (Kopya)`, slug: '' }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `${p.name} (Kopya)`, slug: '', description: p.description, price: p.price, stock: p.stock, category: p.category, brand: p.brand, featured: false, gradient: p.gradient }),
     })));
     clearSel(); await fetchProducts(); notify('success', `${items.length} ürün kopyalandı`);
   };
@@ -150,7 +173,7 @@ export default function AdminUrunlerPage() {
 
   const exportCsv = () => {
     const rows = [['id', 'name', 'slug', 'brand', 'category', 'price', 'stock', 'featured']];
-    visible.forEach(p => rows.push([String(p.id), p.name, p.slug, p.brand, p.category, String(p.price), String(p.stock), String(p.featured)]));
+    visible.forEach(p => rows.push([p.id, p.name, p.slug, p.brand, p.category, String(p.price), String(p.stock), String(p.featured)]));
     const csv = rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a'); a.href = url; a.download = 'urunler.csv'; a.click();
@@ -170,12 +193,12 @@ export default function AdminUrunlerPage() {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <p className="font-semibold text-sm truncate" style={{ color: 'var(--ad-text)' }}>{p.name}</p>
-          {p.featured === 1 && <Star size={13} className="text-amber-400 fill-amber-400 flex-shrink-0" />}
+          {p.featured && <Star size={13} className="text-amber-400 fill-amber-400 flex-shrink-0" />}
         </div>
         <p className="text-[11px] ad-muted">{p.brand} · {CATEGORY_LABELS[p.category] ?? p.category}</p>
       </div>
       <p className="font-bold text-sm w-24 text-right flex-shrink-0 hidden sm:block" style={{ color: 'var(--ad-text)' }}>₺{p.price.toLocaleString('tr-TR')}</p>
-      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0 w-20 text-center ${p.stock === 0 ? 'bg-red-500/10 text-red-500' : p.stock <= 1 ? 'bg-amber-500/10 text-amber-600' : 'bg-green-500/10 text-green-600'}`}>
+      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0 w-20 text-center ${p.stock === 0 ? 'bg-red-500/10 text-red-500' : p.stock <= 2 ? 'bg-amber-500/10 text-amber-600' : 'bg-green-500/10 text-green-600'}`}>
         {p.stock === 0 ? 'Tükendi' : `${p.stock} var`}
       </span>
       <div className="flex items-center gap-1 flex-shrink-0">
@@ -189,7 +212,6 @@ export default function AdminUrunlerPage() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
       <div className="ad-card p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
@@ -224,7 +246,6 @@ export default function AdminUrunlerPage() {
         </AnimatePresence>
       </div>
 
-      {/* Bulk bar */}
       <AnimatePresence>
         {selected.size > 0 && (
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
@@ -241,7 +262,6 @@ export default function AdminUrunlerPage() {
         )}
       </AnimatePresence>
 
-      {/* Grid */}
       <div className="ad-card overflow-hidden">
         <div className="flex items-center gap-3 px-3 sm:px-4 py-3 border-b ad-border-c text-[11px] font-bold uppercase tracking-wider ad-muted">
           <button onClick={toggleAll} className="ad-muted hover:text-brand-500">{allSelected ? <CheckSquare size={18} className="text-brand-500" /> : <Square size={18} />}</button>

@@ -105,7 +105,7 @@ export default function Footer() {
             </Link>
 
             <p className="font-serif italic text-xl leading-relaxed text-white/70 mb-8 max-w-md">
-              "Her bebek, en iyisini hak eder."
+              &ldquo;Her bebek, en iyisini hak eder.&rdquo;
             </p>
 
             <p className="text-[11px] font-bold uppercase tracking-[3px] text-white/40 mb-3">Bültene Katılın</p>
@@ -138,7 +138,7 @@ export default function Footer() {
             <ul className="space-y-3">
               {[
                 { href: '/urunler?kategori=bebek-arabasi', label: 'Bebek Arabaları' },
-                { href: '/urunler?kategori=oto-koltu%C4%9Fu', label: 'Oto Koltukları' },
+                { href: '/urunler?kategori=oto-koltugu', label: 'Oto Koltukları' },
                 { href: '/urunler?kategori=aksesuar', label: 'Aksesuarlar' },
                 { href: '/urunler', label: 'Tüm Ürünler' },
               ].map(({ href, label }) => (
@@ -154,7 +154,7 @@ export default function Footer() {
             <h4 className="text-[11px] font-bold uppercase tracking-[3px] text-white/40 mt-8 mb-5">Bilgi</h4>
             <ul className="space-y-3">
               {[
-                { href: '#', label: 'Hakkımızda' },
+                { href: '/blog', label: 'Blog' },
                 { href: '#', label: 'Nasıl Çalışır?' },
                 { href: '#', label: 'İade Politikası' },
                 { href: '/admin', label: 'Admin Paneli' },

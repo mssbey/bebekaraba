@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, LogOut, ExternalLink, PanelLeftClose } from 'lucide-react';
+import { signOut } from 'next-auth/react';
 import { NAV } from '@/lib/admin-nav';
 import { useAdmin } from './AdminProvider';
 
@@ -74,13 +75,13 @@ export default function Sidebar() {
           <ExternalLink size={17} className="flex-shrink-0" />
           {!collapsed && <span>Siteyi Gör</span>}
         </Link>
-        <a
-          href="/api/admin/logout"
-          className={`ad-sidebar-link flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/60 hover:!bg-red-500/15 hover:text-red-300 ${collapsed ? 'justify-center' : ''}`}
+        <button
+          onClick={() => signOut({ callbackUrl: '/admin/login' })}
+          className={`ad-sidebar-link w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/60 hover:!bg-red-500/15 hover:text-red-300 ${collapsed ? 'justify-center' : ''}`}
         >
           <LogOut size={17} className="flex-shrink-0" />
           {!collapsed && <span>Çıkış Yap</span>}
-        </a>
+        </button>
       </div>
 
       {/* Collapse toggle (desktop) */}

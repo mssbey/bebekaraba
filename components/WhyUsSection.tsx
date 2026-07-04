@@ -82,7 +82,7 @@ export default function WhyUsSection({ totalOrders }: Props) {
             <div className="relative pl-7 mb-10 max-w-md" style={{ borderLeft: '3px solid #EF742C' }}>
               <Quote size={28} className="absolute -left-1.5 -top-2 opacity-0" />
               <p className="font-serif italic text-xl leading-relaxed" style={{ color: '#4A4A5A' }}>
-                "Her ürünü, kendi çocuğumuza alır gibi seçiyoruz. Fiziksel kontrol, dürüst açıklama, gerçek fotoğraf."
+                &ldquo;Her ürünü, kendi çocuğumuza alır gibi seçiyoruz. Fiziksel kontrol, dürüst açıklama, gerçek fotoğraf.&rdquo;
               </p>
             </div>
 

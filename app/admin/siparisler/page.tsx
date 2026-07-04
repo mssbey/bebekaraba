@@ -7,26 +7,35 @@ import { useAdmin } from '@/components/admin/AdminProvider';
 
 interface OrderItem { product_name: string; price: number; quantity: number; }
 interface Order {
-  id: number; order_number: string; customer_name: string; customer_email: string;
-  customer_phone: string; customer_address: string; city: string; notes: string;
-  total: number; status: string; created_at: string; items: OrderItem[];
+  id: string;
+  order_number: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  customer_address: string;
+  city: string;
+  notes: string;
+  total: number;
+  status: string;
+  created_at: string;
+  items: OrderItem[];
 }
 
 const STATUS = [
-  { value: 'beklemede', label: 'Beklemede', color: '#F59E0B' },
-  { value: 'onaylandi', label: 'Onaylandı', color: '#3B82F6' },
-  { value: 'kargoda', label: 'Kargoda', color: '#8B5CF6' },
-  { value: 'teslim_edildi', label: 'Teslim Edildi', color: '#22C55E' },
-  { value: 'iptal', label: 'İptal', color: '#EF4444' },
+  { value: 'PENDING', label: 'Beklemede', color: '#F59E0B' },
+  { value: 'PREPARING', label: 'Hazırlanıyor', color: '#3B82F6' },
+  { value: 'SHIPPED', label: 'Kargoda', color: '#8B5CF6' },
+  { value: 'DELIVERED', label: 'Teslim Edildi', color: '#22C55E' },
+  { value: 'CANCELLED', label: 'İptal', color: '#EF4444' },
 ];
-const FLOW = ['beklemede', 'onaylandi', 'kargoda', 'teslim_edildi'];
+const FLOW = ['PENDING', 'PREPARING', 'SHIPPED', 'DELIVERED'];
 const fmt = (n: number) => `₺${n.toLocaleString('tr-TR')}`;
 
 export default function AdminSiparislerPage() {
   const { toast } = useAdmin();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
 
@@ -34,16 +43,22 @@ export default function AdminSiparislerPage() {
     setLoading(true);
     const res = await fetch('/api/orders');
     const data = await res.json();
-    setOrders(data.orders ?? []);
+    setOrders(Array.isArray(data) ? data : (data.orders ?? []));
     setLoading(false);
   }, []);
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  const updateStatus = async (id: number, status: string) => {
-    const res = await fetch(`/api/orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+  const updateStatus = async (id: string, status: string) => {
+    const res = await fetch(`/api/orders/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
     if (res.ok) {
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
       toast({ kind: 'success', title: 'Durum güncellendi' });
+    } else {
+      toast({ kind: 'error', title: 'Güncellenemedi' });
     }
   };
 
@@ -51,7 +66,11 @@ export default function AdminSiparislerPage() {
     let list = [...orders];
     if (q.trim()) {
       const s = q.toLowerCase();
-      list = list.filter(o => o.order_number.toLowerCase().includes(s) || o.customer_name.toLowerCase().includes(s) || o.customer_email.toLowerCase().includes(s));
+      list = list.filter(o =>
+        o.order_number.toLowerCase().includes(s) ||
+        o.customer_name.toLowerCase().includes(s) ||
+        o.customer_email.toLowerCase().includes(s)
+      );
     }
     if (filter !== 'all') list = list.filter(o => o.status === filter);
     return list;
@@ -59,7 +78,7 @@ export default function AdminSiparislerPage() {
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: orders.length };
-    STATUS.forEach(s => c[s.value] = orders.filter(o => o.status === s.value).length);
+    STATUS.forEach(s => { c[s.value] = orders.filter(o => o.status === s.value).length; });
     return c;
   }, [orders]);
 
@@ -83,7 +102,9 @@ export default function AdminSiparislerPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 ad-muted" />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Sipariş no, müşteri veya e-posta ara..." className="ad-input !pl-9" />
         </div>
-        <button onClick={fetchOrders} className="ad-btn-ghost h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"><RefreshCw size={15} /></button>
+        <button onClick={fetchOrders} className="ad-btn-ghost h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0">
+          <RefreshCw size={15} />
+        </button>
       </div>
 
       {loading ? (
@@ -101,7 +122,10 @@ export default function AdminSiparislerPage() {
             const stepIdx = FLOW.indexOf(order.status);
             return (
               <div key={order.id} className="ad-card overflow-hidden">
-                <button onClick={() => setExpanded(isOpen ? null : order.id)} className="w-full flex items-center gap-4 px-4 sm:px-5 py-4 text-left hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
+                <button
+                  onClick={() => setExpanded(isOpen ? null : order.id)}
+                  className="w-full flex items-center gap-4 px-4 sm:px-5 py-4 text-left hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
+                >
                   <ChevronDown size={18} className={`ad-muted transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-navy-100 to-navy-200 dark:from-navy-700 dark:to-navy-800 flex items-center justify-center text-navy-700 dark:text-white font-bold text-xs flex-shrink-0">
                     {order.customer_name.slice(0, 2).toUpperCase()}
@@ -112,15 +136,22 @@ export default function AdminSiparislerPage() {
                   </div>
                   <p className="font-bold text-sm hidden sm:block flex-shrink-0" style={{ color: 'var(--ad-text)' }}>{fmt(order.total)}</p>
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ background: `${st.color}1A`, color: st.color }}>{st.label}</span>
-                  <p className="text-[11px] ad-muted flex-shrink-0 hidden md:block">{new Date(order.created_at).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })}</p>
+                  <p className="text-[11px] ad-muted flex-shrink-0 hidden md:block">
+                    {new Date(order.created_at).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })}
+                  </p>
                 </button>
 
                 <AnimatePresence>
                   {isOpen && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-t ad-border-c">
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden border-t ad-border-c"
+                    >
                       <div className="p-5 space-y-5">
                         {/* Timeline */}
-                        {order.status !== 'iptal' && (
+                        {order.status !== 'CANCELLED' && (
                           <div className="flex items-center gap-1">
                             {FLOW.map((s, i) => {
                               const done = i <= stepIdx;
@@ -170,11 +201,15 @@ export default function AdminSiparislerPage() {
                             {STATUS.map(s => (
                               <button key={s.value} onClick={() => updateStatus(order.id, s.value)}
                                 className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
-                                style={order.status === s.value ? { background: s.color, color: '#fff', borderColor: s.color } : { borderColor: 'var(--ad-border)', color: 'var(--ad-muted)' }}>
+                                style={order.status === s.value
+                                  ? { background: s.color, color: '#fff', borderColor: s.color }
+                                  : { borderColor: 'var(--ad-border)', color: 'var(--ad-muted)' }}>
                                 {s.label}
                               </button>
                             ))}
-                            <button onClick={() => window.print()} className="ad-btn-ghost px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 ml-auto"><Printer size={13} /> Fatura Yazdır</button>
+                            <button onClick={() => window.print()} className="ad-btn-ghost px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 ml-auto">
+                              <Printer size={13} /> Yazdır
+                            </button>
                           </div>
                         </div>
                       </div>

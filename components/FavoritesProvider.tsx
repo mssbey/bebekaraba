@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 export interface FavoriteItem {
-  id: number;
+  id: string;
   name: string;
   slug: string;
   price: number;
@@ -14,8 +14,8 @@ export interface FavoriteItem {
 interface FavoritesContextType {
   favorites: FavoriteItem[];
   toggleFavorite: (item: FavoriteItem) => void;
-  removeFavorite: (id: number) => void;
-  isFavorite: (id: number) => boolean;
+  removeFavorite: (id: string) => void;
+  isFavorite: (id: string) => boolean;
   count: number;
   isOpen: boolean;
   openFavorites: () => void;
@@ -45,11 +45,11 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
       : [...prev, item]);
   }, []);
 
-  const removeFavorite = useCallback((id: number) => {
+  const removeFavorite = useCallback((id: string) => {
     setFavorites(prev => prev.filter(f => f.id !== id));
   }, []);
 
-  const isFavorite = useCallback((id: number) => favorites.some(f => f.id === id), [favorites]);
+  const isFavorite = useCallback((id: string) => favorites.some(f => f.id === id), [favorites]);
   const openFavorites = useCallback(() => setIsOpen(true), []);
   const closeFavorites = useCallback(() => setIsOpen(false), []);
 

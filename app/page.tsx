@@ -27,7 +27,7 @@ export default async function HomePage() {
   const imgOf = (cat: string) => allProducts.find((p) => p.category === cat && p.image)?.image ?? '/products/1.jpeg';
   const categories = [
     { slug: 'bebek-arabasi', title: 'Bebek Arabaları', desc: 'Stokke, Bugaboo ve daha fazlası — yüksek konfor, üst düzey güvenlik.', count: countBy('bebek-arabasi'), image: imgOf('bebek-arabasi'), emoji: '🍼', glow: 'rgba(180,211,180,0.9)', tint: 'rgba(30,53,86,0.85)' },
-    { slug: 'oto-koltuğu', title: 'Oto Koltukları', desc: 'Güvenli yolculuklar için 360° dönen premium modeller.', count: countBy('oto-koltuğu'), image: imgOf('oto-koltuğu'), emoji: '🚗', glow: 'rgba(255,208,184,0.9)', tint: 'rgba(30,53,86,0.82)' },
+    { slug: 'oto-koltugu', title: 'Oto Koltukları', desc: 'Güvenli yolculuklar için 360° dönen premium modeller.', count: countBy('oto-koltugu'), image: imgOf('oto-koltugu'), emoji: '🚗', glow: 'rgba(255,208,184,0.9)', tint: 'rgba(30,53,86,0.82)' },
     { slug: 'aksesuar', title: 'Aksesuarlar', desc: 'Deneyimi tamamlayan özenli detaylar.', count: countBy('aksesuar'), image: imgOf('aksesuar'), emoji: '✨', glow: 'rgba(184,206,255,0.9)', tint: 'rgba(30,53,86,0.82)' },
   ];
 

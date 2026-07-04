@@ -1,14 +1,23 @@
+import type { Metadata } from 'next';
 import { getProducts } from '@/lib/db';
 import ProductCard from '@/components/ProductCard';
 import Link from 'next/link';
 import { SlidersHorizontal, ArrowUpDown, Package } from 'lucide-react';
+import { buildMetadata } from '@/lib/seo';
+import { breadcrumbSchema } from '@/lib/schema';
 
 export const dynamic = 'force-dynamic';
+
+const CATEGORY_LABELS: Record<string, string> = {
+  'bebek-arabasi': 'Bebek Arabaları',
+  'oto-koltugu': 'Oto Koltukları',
+  'aksesuar': 'Aksesuarlar',
+};
 
 const CATEGORIES = [
   { value: '', label: 'Tüm Ürünler' },
   { value: 'bebek-arabasi', label: 'Bebek Arabaları' },
-  { value: 'oto-koltuğu', label: 'Oto Koltukları' },
+  { value: 'oto-koltugu', label: 'Oto Koltukları' },
   { value: 'aksesuar', label: 'Aksesuarlar' },
 ];
 
@@ -28,6 +37,18 @@ const PRICE_RANGES = [
 ];
 
 interface SearchParams { kategori?: string; siralama?: string; fiyat?: string; stok?: string; }
+
+export async function generateMetadata({ searchParams }: { searchParams: Promise<SearchParams> }): Promise<Metadata> {
+  const { kategori = '' } = await searchParams;
+  const label = CATEGORY_LABELS[kategori] || 'Tüm Ürünler';
+  return buildMetadata({
+    title: kategori ? `${label} — Premium İkinci El` : 'Tüm Ürünler — Mağaza',
+    description: kategori
+      ? `Premium ikinci el ${label.toLowerCase()} — uzman kontrolünden geçmiş, güvenli ve uygun fiyatlı seçenekler.`
+      : 'Bebek arabası, oto koltuğu ve aksesuarlarda premium ikinci el seçenekleri keşfedin.',
+    path: kategori ? `/urunler?kategori=${kategori}` : '/urunler',
+  });
+}
 
 function buildHref(base: Record<string, string | undefined>, override: Record<string, string | undefined>) {
   const params = new URLSearchParams();
@@ -58,9 +79,14 @@ export default async function UrunlerPage({ searchParams }: { searchParams: Prom
   else if (siralama === 'isim') products = [...products].sort((a, b) => a.name.localeCompare(b.name, 'tr'));
 
   const currentSP = { kategori: kategori || undefined, siralama: siralama || undefined, fiyat: fiyat || undefined, stok: stok || undefined };
+  const schema = breadcrumbSchema([
+    { name: 'Ana Sayfa', path: '/' },
+    { name: 'Ürünler', path: '/urunler' },
+  ]);
 
   return (
     <div className="bg-cream min-h-screen">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       {/* Page Header */}
       <div className="bg-white border-b border-[#EDE9E4] pt-24 pb-8">
         <div className="container mx-auto px-4 sm:px-6">
@@ -69,7 +95,7 @@ export default async function UrunlerPage({ searchParams }: { searchParams: Prom
               <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-1">Mağaza</p>
               <h1 className="font-serif text-3xl sm:text-4xl font-bold text-navy-900">
                 {kategori === 'bebek-arabasi' ? 'Bebek Arabaları'
-                  : kategori === 'oto-koltuğu' ? 'Oto Koltukları'
+                  : kategori === 'oto-koltugu' ? 'Oto Koltukları'
                   : kategori === 'aksesuar' ? 'Aksesuarlar'
                   : 'Tüm Ürünler'}
               </h1>

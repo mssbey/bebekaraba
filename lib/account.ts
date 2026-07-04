@@ -6,7 +6,7 @@ export interface AccountUser {
 }
 
 export interface LocalOrderItem {
-  product_id: number;
+  product_id: string;
   product_name: string;
   price: number;
   quantity: number;

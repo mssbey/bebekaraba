@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { signIn } from 'next-auth/react';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, ShieldCheck, Boxes, Truck, Users, CheckCircle2 } from 'lucide-react';
 
@@ -29,18 +30,17 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError('');
 
-    const res = await fetch('/api/admin/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+    const result = await signIn('credentials', {
+      email,
+      password,
+      redirect: false,
     });
 
-    if (res.ok) {
+    if (result?.ok && !result.error) {
       setSuccess(true);
       setTimeout(() => { router.push('/admin'); router.refresh(); }, 900);
     } else {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error || 'Giriş başarısız');
+      setError('E-posta veya şifre hatalı');
       setShake(true);
       setTimeout(() => setShake(false), 450);
       setLoading(false);
@@ -51,7 +51,6 @@ export default function AdminLoginPage() {
     <div className="min-h-screen flex" style={{ background: '#0A1628' }}>
       {/* ── LEFT HERO ── */}
       <div className="relative hidden lg:flex w-[52%] overflow-hidden">
-        {/* animated gradient mesh */}
         <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #102A4C 0%, #14325A 45%, #0C1E38 100%)' }} />
         <motion.div
           className="absolute -top-20 -left-10 w-[28rem] h-[28rem] rounded-full blur-3xl"
@@ -65,7 +64,6 @@ export default function AdminLoginPage() {
           animate={{ x: [0, -30, 0], y: [0, -40, 0], scale: [1, 1.15, 1] }}
           transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
         />
-        {/* particles */}
         {[...Array(18)].map((_, i) => (
           <motion.span
             key={i}
@@ -95,9 +93,8 @@ export default function AdminLoginPage() {
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }}
               className="text-white/55 text-base leading-relaxed mb-10"
             >
-              Ürünlerinizi, siparişlerinizi ve müşterilerinizi tek bir şık panelden yönetin. Hızlı, güvenli ve modern.
+              Ürünlerinizi, siparişlerinizi ve müşterilerinizi tek bir şık panelden yönetin.
             </motion.p>
-
             <div className="grid grid-cols-2 gap-3">
               {FEATURES.map((f, i) => {
                 const Icon = f.icon;
@@ -155,7 +152,6 @@ export default function AdminLoginPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold text-gray-600">Şifre</label>
-                <button type="button" className="text-xs text-brand-500 hover:text-brand-600 font-medium">Şifremi unuttum</button>
               </div>
               <div className="relative">
                 <Lock size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />

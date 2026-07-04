@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 interface CartItem {
-  id: number;
+  id: string;
   name: string;
   price: number;
   slug: string;
@@ -15,11 +15,11 @@ interface CartItem {
 interface CartContextType {
   items: CartItem[];
   addItem: (item: Omit<CartItem, 'quantity'>) => void;
-  removeItem: (id: number) => void;
+  removeItem: (id: string) => void;
   clearCart: () => void;
   total: number;
   count: number;
-  isInCart: (id: number) => boolean;
+  isInCart: (id: string) => boolean;
   isOpen: boolean;
   openCart: () => void;
   closeCart: () => void;
@@ -54,7 +54,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setIsOpen(true);
   }, []);
 
-  const removeItem = useCallback((id: number) => {
+  const removeItem = useCallback((id: string) => {
     setItems(prev => prev.filter(i => i.id !== id));
   }, []);
 
@@ -63,7 +63,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('ba_cart');
   }, []);
 
-  const isInCart = useCallback((id: number) => items.some(i => i.id === id), [items]);
+  const isInCart = useCallback((id: string) => items.some(i => i.id === id), [items]);
 
   const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const count = items.reduce((s, i) => s + i.quantity, 0);
