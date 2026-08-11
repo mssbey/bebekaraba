@@ -1,6 +1,6 @@
 import { getSiteUrl, SITE_NAME } from '@/lib/seo';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = false;
 
 export async function GET() {
   const base = getSiteUrl();

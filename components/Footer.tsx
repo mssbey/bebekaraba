@@ -96,7 +96,7 @@ export default function Footer() {
           <div className="lg:col-span-5">
             <Link href="/" className="flex items-center gap-3.5 mb-6 group w-fit">
               <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-white/10 border border-white/15">
-                <Image src="/logo.png" alt="Logo" fill className="object-contain p-2" />
+                <Image src="/logo.png" alt="Logo" fill sizes="56px" className="object-contain p-2" />
               </div>
               <div>
                 <p className="font-serif font-bold text-2xl group-hover:text-orange-300 transition-colors">Bebek Arabacınız</p>
@@ -155,8 +155,8 @@ export default function Footer() {
             <ul className="space-y-3">
               {[
                 { href: '/blog', label: 'Blog' },
-                { href: '#', label: 'Nasıl Çalışır?' },
-                { href: '#', label: 'İade Politikası' },
+                { href: '/sss', label: 'Sıkça Sorulan Sorular' },
+                { href: '/sss#iade-degisim', label: 'İade Politikası' },
                 { href: '/admin', label: 'Admin Paneli' },
               ].map(({ href, label }) => (
                 <li key={label}>
@@ -180,7 +180,13 @@ export default function Footer() {
                   className="group relative aspect-square rounded-xl overflow-hidden"
                   aria-label="Instagram gönderisi"
                 >
-                  <img src={`/products/${i + 1}.jpeg`} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                  <Image
+                    src={`/products/${i + 1}.jpeg`}
+                    alt=""
+                    fill
+                    sizes="96px"
+                    className="object-cover transition-transform duration-500 group-hover:scale-110"
+                  />
                   <div className="absolute inset-0 bg-navy-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <Instagram size={16} className="text-white" />
                   </div>

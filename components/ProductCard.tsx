@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ShoppingCart, Check, Package, Heart, BarChart2, ArrowRight, CreditCard, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useCart } from './CartProvider';
@@ -159,14 +160,19 @@ export default function ProductCard({ product }: { product: Product }) {
           )}
 
           {product.image ? (
-            <motion.img
-              src={product.image}
-              alt={product.name}
-              loading="lazy"
-              className={`absolute inset-0 w-full h-full object-cover ${outOfStock ? 'opacity-40 grayscale' : ''}`}
+            <motion.div
+              className={`absolute inset-0 ${outOfStock ? 'opacity-40 grayscale' : ''}`}
               whileHover={{ scale: 1.06, rotate: 1 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            />
+            >
+              <Image
+                src={product.image}
+                alt={product.name}
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                className="object-cover"
+              />
+            </motion.div>
           ) : (
             <motion.div
               className={`w-full h-full max-w-[160px] max-h-[140px] ${outOfStock ? 'opacity-35 grayscale' : ''}`}

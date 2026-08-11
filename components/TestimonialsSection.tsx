@@ -62,6 +62,10 @@ function TestimonialCard({
       <img
         src={`https://i.pravatar.cc/128?img=${id + 10}`}
         alt={`${author} avatarı`}
+        width={112}
+        height={112}
+        loading="lazy"
+        decoding="async"
         className="pointer-events-none mx-auto h-28 w-28 rounded-full border-2 border-[#EF742C]/40 bg-[#FAF8F4] object-cover"
       />
       <div className="flex justify-center gap-0.5" aria-hidden>

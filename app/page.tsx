@@ -18,8 +18,7 @@ const TRUST_BADGES = [
 ];
 
 export default async function HomePage() {
-  const allProducts = await getProducts();
-  const stats = await getStats();
+  const [allProducts, stats] = await Promise.all([getProducts(), getStats()]);
   const featured = allProducts.filter((p) => p.featured && p.stock > 0).slice(0, 4);
   const recent = allProducts.filter((p) => p.stock > 0).slice(0, 8);
 

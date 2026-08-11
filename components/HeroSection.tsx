@@ -1,8 +1,5 @@
-'use client';
-
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, ChevronDown } from 'lucide-react';
-import { useEffect, useRef } from 'react';
 
 interface Props {
   totalProducts: number;
@@ -11,25 +8,19 @@ interface Props {
 }
 
 export default function HeroSection({ totalProducts, totalOrders, inStock }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.playbackRate = 0.8;
-    }
-  }, []);
-
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden">
       {/* Video Background */}
       <video
-        ref={videoRef}
         autoPlay
         muted
         loop
         playsInline
+        preload="metadata"
+        poster="/banner-poster.webp"
+        aria-hidden="true"
         className="absolute inset-0 w-full h-full object-cover"
-        src="/banner.mp4"
+        src="/banner-optimized.mp4"
       />
 
       {/* Gradient overlay — top-to-bottom, dark navy to transparent then dark at bottom */}

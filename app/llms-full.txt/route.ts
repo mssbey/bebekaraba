@@ -2,7 +2,7 @@ import { getSiteUrl, SITE_NAME } from '@/lib/seo';
 import { getProducts } from '@/lib/db';
 import { getBlogPosts } from '@/lib/blog';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 
 export async function GET() {
   const base = getSiteUrl();

@@ -46,7 +46,7 @@ export function buildMetadata({
   const fullTitle = title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
 
   return {
-    title: fullTitle,
+    title,
     description,
     keywords: keywords?.join(', '),
     alternates: { canonical: url },

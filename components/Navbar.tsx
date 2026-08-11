@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: '/urunler?kategori=oto-koltugu', label: 'Oto Koltukları' },
   { href: '/urunler?kategori=aksesuar', label: 'Aksesuarlar' },
   { href: '/blog', label: 'Blog' },
+  { href: '/sss', label: 'SSS' },
 ];
 
 export default function Navbar() {
@@ -49,6 +50,7 @@ export default function Navbar() {
                   src="/logo.png"
                   alt="Bebek Arabacınız"
                   fill
+                  sizes="36px"
                   className="object-contain p-1"
                   priority
                 />
@@ -153,7 +155,7 @@ export default function Navbar() {
             <div className="flex items-center justify-between px-6 py-5 border-b border-border">
               <div className="flex items-center gap-2.5">
                 <div className="relative w-8 h-8 rounded-lg overflow-hidden bg-cream-100 border border-border">
-                  <Image src="/logo.png" alt="Logo" fill className="object-contain p-1" />
+                  <Image src="/logo.png" alt="Logo" fill sizes="36px" className="object-contain p-1" />
                 </div>
                 <span className="font-serif font-bold text-navy-700">Bebek Arabacınız</span>
               </div>

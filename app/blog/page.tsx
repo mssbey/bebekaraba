@@ -5,7 +5,7 @@ import { breadcrumbSchema } from '@/lib/schema';
 import BlogCard from '@/components/BlogCard';
 import BlogExplorer from '@/components/BlogExplorer';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 
 export function generateMetadata(): Metadata {
   return buildMetadata({

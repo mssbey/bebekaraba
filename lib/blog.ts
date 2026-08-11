@@ -4,6 +4,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { readingTimeMinutes } from './seo';
+import { blogSeedData } from '../prisma/blog-seed-data';
 
 export interface BlogFaqItem {
   question: string;
@@ -64,31 +65,66 @@ function toBlogPost(row: any): BlogPost {
   };
 }
 
-export async function getBlogPosts(opts: { includeDrafts?: boolean } = {}): Promise<BlogPost[]> {
-  const rows = await prisma.blogPost.findMany({
-    where: opts.includeDrafts ? {} : { published: true },
-    orderBy: [{ sortOrder: 'asc' }, { publishedAt: 'desc' }],
+function getFallbackBlogPosts(): BlogPost[] {
+  return blogSeedData.map((post) => {
+    const date = new Date(Date.UTC(2026, 5, Math.max(1, 30 - post.sortOrder))).toISOString();
+
+    return {
+      ...post,
+      id: `seed-${post.slug}`,
+      authorName: 'Bebek Arabacınız',
+      published: true,
+      publishedAt: date,
+      createdAt: date,
+      updatedAt: date,
+      readingTime: readingTimeMinutes(post.content),
+    };
   });
-  return rows.map(toBlogPost);
+}
+
+export async function getBlogPosts(opts: { includeDrafts?: boolean } = {}): Promise<BlogPost[]> {
+  try {
+    const rows = await prisma.blogPost.findMany({
+      where: opts.includeDrafts ? {} : { published: true },
+      orderBy: [{ sortOrder: 'asc' }, { publishedAt: 'desc' }],
+    });
+    return rows.length > 0 ? rows.map(toBlogPost) : getFallbackBlogPosts();
+  } catch {
+    return getFallbackBlogPosts();
+  }
 }
 
 export async function getBlogPost(idOrSlug: string, opts: { includeDrafts?: boolean } = {}): Promise<BlogPost | null> {
-  const row = await prisma.blogPost.findFirst({
-    where: {
-      OR: [{ id: idOrSlug }, { slug: idOrSlug }],
-      ...(opts.includeDrafts ? {} : { published: true }),
-    },
-  });
-  return row ? toBlogPost(row) : null;
+  try {
+    const row = await prisma.blogPost.findFirst({
+      where: {
+        OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+        ...(opts.includeDrafts ? {} : { published: true }),
+      },
+    });
+    if (row) return toBlogPost(row);
+  } catch {
+    // Kurulum veya veritabanı kesintisinde yerleşik rehberler kullanılır.
+  }
+
+  return getFallbackBlogPosts().find((post) => post.id === idOrSlug || post.slug === idOrSlug) ?? null;
 }
 
 export async function getRelatedBlogPosts(post: BlogPost, limit = 3): Promise<BlogPost[]> {
-  const rows = await prisma.blogPost.findMany({
-    where: { published: true, category: post.category, slug: { not: post.slug } },
-    orderBy: { publishedAt: 'desc' },
-    take: limit,
-  });
-  return rows.map(toBlogPost);
+  try {
+    const rows = await prisma.blogPost.findMany({
+      where: { published: true, category: post.category, slug: { not: post.slug } },
+      orderBy: { publishedAt: 'desc' },
+      take: limit,
+    });
+    if (rows.length > 0) return rows.map(toBlogPost);
+  } catch {
+    // Aşağıdaki yerleşik rehber listesine düş.
+  }
+
+  return getFallbackBlogPosts()
+    .filter((candidate) => candidate.category === post.category && candidate.slug !== post.slug)
+    .slice(0, limit);
 }
 
 function slugifyTr(s: string): string {

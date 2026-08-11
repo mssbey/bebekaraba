@@ -3,13 +3,18 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { Clock, ChevronRight, ArrowRight } from 'lucide-react';
-import { getBlogPost, getRelatedBlogPosts, BLOG_CATEGORIES } from '@/lib/blog';
+import { getBlogPost, getBlogPosts, getRelatedBlogPosts, BLOG_CATEGORIES } from '@/lib/blog';
 import { buildMetadata } from '@/lib/seo';
 import { articleSchema, breadcrumbSchema, faqSchema } from '@/lib/schema';
 import BlogContent from '@/components/BlogContent';
 import BlogCard from '@/components/BlogCard';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
+
+export async function generateStaticParams() {
+  const posts = await getBlogPosts();
+  return posts.map((post) => ({ slug: post.slug }));
+}
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso));

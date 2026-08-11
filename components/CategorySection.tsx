@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 
@@ -38,7 +39,13 @@ function CatCard({ cat, large = false }: { cat: Cat; large?: boolean }) {
           variants={{ hover: { scale: 1.06 } }}
           transition={{ duration: 0.8, ease }}
         >
-          <img src={cat.image} alt={cat.title} className="w-full h-full object-cover" />
+          <Image
+            src={cat.image}
+            alt={cat.title}
+            fill
+            sizes={large ? '(max-width: 1024px) 100vw, 50vw' : '(max-width: 1024px) 100vw, 50vw'}
+            className="object-cover"
+          />
         </motion.div>
 
         {/* Tint + gradient */}
