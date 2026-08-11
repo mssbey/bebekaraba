@@ -7,12 +7,15 @@ import type { Metadata } from 'next';
 export const SITE_NAME = 'Bebek Arabacınız';
 export const SITE_TAGLINE = 'Premium İkinci El Bebek Arabaları';
 export const DEFAULT_LOCALE = 'tr_TR';
+const PRODUCTION_SITE_URL = 'https://www.bebekarabaciniz.com';
 
 export function getSiteUrl(): string {
   const url =
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.SITE_URL ||
-    'http://localhost:3000';
+    (process.env.NODE_ENV === 'development'
+      ? 'http://localhost:3000'
+      : PRODUCTION_SITE_URL);
   return url.replace(/\/+$/, '');
 }
 
